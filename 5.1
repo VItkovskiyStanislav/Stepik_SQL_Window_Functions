@@ -1,0 +1,98 @@
+Part 1
+SELECT
+    first_name,
+    last_name,
+    created_at,
+    ROW_NUMBER() OVER (ORDER BY created_at) AS registration_number
+FROM users
+ORDER BY registration_number
+
+Part 2
+SELECT
+    name,
+    category_id,
+    price,
+    RANK() OVER (ORDER BY price DESC) AS price_rank
+FROM products
+ORDER BY price_rank
+
+Part 3
+SELECT
+    id,
+    total_amount,
+    order_status,
+    NTILE(4) OVER (ORDER BY total_amount DESC) AS amount_quartile
+FROM orders
+
+Part 4
+SELECT 
+    category_id,
+    name,
+    price,
+    DENSE_RANK() OVER (
+        PARTITION BY category_id 
+        ORDER BY price DESC
+    ) AS dense_price_rank
+FROM products
+
+Part 5
+SELECT
+    id,
+    order_status,
+    total_amount,
+    PERCENT_RANK() OVER (PARTITION BY order_status ORDER BY total_amount) AS status_percent_rank
+FROM orders
+ORDER BY order_status, status_percent_rank
+
+Part 6
+SELECT
+    id,
+    payment_method,
+    payment_amount,
+    payment_date,
+    ROW_NUMBER() OVER (PARTITION BY payment_method ORDER BY payment_date ASC) AS method_payment_seq
+FROM payments
+ORDER BY payment_method, method_payment_seq
+
+Part 7
+SELECT
+    product_name_upper,
+    price,
+    ROUND(avg_rating, 4) AS avg_rating,
+    DENSE_RANK() OVER (
+        ORDER BY avg_rating DESC
+    ) AS product_rating_rank
+FROM (SELECT
+        UPPER(p.name) AS product_name_upper,
+        p.price,
+        COALESCE(AVG(r.rating), 0) AS avg_rating
+        FROM products p
+        LEFT JOIN reviews r
+            ON p.id = r.product_id
+        GROUP BY p.id, p.name, p.price
+	    ) AS product_stats
+ORDER BY product_rating_rank
+
+Part 8
+SELECT
+    full_name,
+    city,
+    activity_status,
+    total_spent,
+    NTILE(3) OVER (
+        ORDER BY total_spent DESC
+    ) AS customer_spend_segment
+FROM (
+    SELECT
+        CONCAT(u.first_name, ' ', u.last_name) AS full_name,
+        u.city,
+        CASE
+            WHEN u.is_active = 1 THEN 'Active'
+            ELSE 'Inactive'
+        END AS activity_status,
+        COALESCE(SUM(o.total_amount), 0) AS total_spent
+    FROM users u
+    LEFT JOIN orders o ON u.id = o.user_id
+    GROUP BY u.id, u.first_name, u.last_name, u.city, u.is_active
+	) as user_spending
+ORDER BY customer_spend_segment, total_spent DESC;
