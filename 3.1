@@ -1,0 +1,84 @@
+3.1
+Part 1
+SELECT
+    id,
+    user_id,
+    total_amount,
+    SUM(total_amount) OVER (PARTITION BY user_id) AS user_total_sum
+FROM orders
+ORDER BY user_id, id
+
+Part 2
+SELECT name, 
+       price, 
+       category_id,
+       AVG(price) OVER (
+        PARTITION BY category_id
+    ) AS user_total_sum
+FROM products
+ORDER by category_id, price desc
+
+Part 3
+select
+    first_name,
+    last_name,
+    country,
+    count(last_name) OVER (
+        PARTITION BY country
+    ) AS user_in_country
+from users
+order by country, last_name
+
+Part 4
+select
+    id,
+    order_id,
+    payment_amount,
+    payment_method,
+    min(payment_amount) over (
+        partition by payment_method
+    ) as min_method_payment,
+    max(payment_amount) over (
+        partition by payment_method
+    ) as max_method_payment
+from payments
+order by payment_method, payment_amount desc
+
+Part 5
+select
+    product_id,
+    rating,
+    comment,
+    avg(rating) over (
+        partition by product_id
+    ) as product_avg_rating
+from reviews
+order by product_id, rating desc
+
+Part 6
+SELECT
+    id,
+    total_amount,
+    order_status,
+    COUNT(*) OVER (
+        PARTITION BY order_status
+    ) AS status_count,
+    AVG(total_amount) OVER (
+        PARTITION BY order_status
+    ) AS status_avg_amount,
+    SUM(total_amount) OVER (
+        PARTITION BY order_status
+    ) AS status_total_sum
+FROM orders
+ORDER BY order_status ASC, total_amount DESC
+
+Part 7
+select
+    order_id,
+    shipment_status,
+    shipment_date,
+    COUNT(*) OVER (PARTITION BY shipment_status) AS count_by_status,
+    MAX(shipment_date) OVER (PARTITION BY shipment_status) AS max_date_in_status
+FROM shipments
+WHERE shipment_date IS NOT NULL
+ORDER BY shipment_status ASC, shipment_date
