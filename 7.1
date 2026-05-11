@@ -1,0 +1,92 @@
+Part 1
+SELECT
+    user_id,
+    created_at,
+    total_amount,
+    LAG(total_amount) OVER (
+        PARTITION BY user_id 
+        ORDER BY created_at
+    ) AS previous_order_amount
+FROM orders
+ 
+Part 2
+SELECT
+    category_id,
+    name,
+    price,
+    LEAD(price) OVER (
+        PARTITION BY category_id
+        ORDER BY price
+    ) AS next_product_price
+FROM
+    products
+ORDER BY category_id, price
+
+Part 3
+SELECT
+    category_id,
+    name,
+    price,
+    FIRST_VALUE(price) OVER (
+        PARTITION BY category_id
+        ORDER BY price ASC
+        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+    ) AS cheapest_in_category
+FROM products
+ORDER BY category_id, price
+
+Part 4
+SELECT
+    order_id,
+    payment_date,
+    payment_amount,
+    COALESCE(
+        LEAD(payment_amount) OVER (
+            PARTITION BY order_id
+            ORDER BY payment_date
+        ), 0
+    ) AS next_payment_amount
+FROM payments
+ORDER BY order_id, payment_date
+
+Part 5
+SELECT
+    order_id,
+    shipment_date,
+    tracking_number,
+     NTH_VALUE(shipment_date, 2) OVER (
+       PARTITION BY order_id
+        ORDER BY shipment_date
+        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+    ) AS second_shipment_date
+FROM shipments 
+ORDER BY order_id, shipment_date
+
+Part 6
+SELECT 
+    u.last_name,
+    o.total_amount,
+    LAG(o.total_amount) OVER (PARTITION BY u.id ORDER BY o.created_at) AS prev_total_amount,
+    CASE 
+        WHEN LAG(o.total_amount) OVER (PARTITION BY u.id ORDER BY o.created_at) IS NULL THEN 'Initial'
+        WHEN o.total_amount > LAG(o.total_amount) OVER (PARTITION BY u.id ORDER BY o.created_at) THEN 'Up'
+        WHEN o.total_amount < LAG(o.total_amount) OVER (PARTITION BY u.id ORDER BY o.created_at) THEN 'Down'
+        ELSE 'Stable'
+    END AS price_trend
+FROM users u
+JOIN orders o ON u.id = o.user_id
+ORDER BY u.last_name, o.created_at
+
+Part 7
+SELECT
+  c.name AS category_name,
+  p.name AS product_name,
+  p.price,
+  FIRST_VALUE(p.price) OVER (PARTITION BY c.id ORDER BY p.price) AS cheapest_price,
+  CASE
+    WHEN p.price / NULLIF(FIRST_VALUE(p.price) OVER (PARTITION BY c.id ORDER BY p.price), 0) > 2 THEN 'Expensive'
+    ELSE 'Standard'
+  END AS price_comparison
+FROM products p
+JOIN categories c ON p.category_id = c.id
+ORDER BY c.name, p.price
