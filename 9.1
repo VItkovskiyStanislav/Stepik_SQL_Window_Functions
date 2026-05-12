@@ -1,0 +1,268 @@
+Part 1
+Необходимо рассчитать нарастающий итог продаж на основе таблицы orders.
+Выведите идентификатор заказа (id), дату (created_at) и сумму заказа (total_amount).
+Добавьте столбец cumulative_sum, который вычисляет сумму текущего заказа и всех предыдущих заказов, отсортированных по дате.
+Для определения границ окна используйте ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW.
+Результат отсортируйте по столбцу created_at по возрастанию.
+SELECT
+    id,
+    created_at,
+    total_amount,
+        SUM(total_amount) OVER (
+        ORDER BY created_at
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS cumulative_sum
+FROM orders
+ORDER BY created_at
+
+Part 2
+Для анализа цен в таблице products требуется рассчитать скользящее среднее.
+Выведите название товара (name), цену (price) и идентификатор категории (category_id).
+Добавьте столбец moving_avg_price, который вычисляет среднюю цену для текущего товара, одного предыдущего и одного следующего товара внутри его категории.
+Используйте ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING.
+Результат отсортируйте по category_id по возрастанию, а затем по price по возрастанию.
+SELECT
+    name,
+    price,
+    category_id,
+    AVG(price) OVER (
+        PARTITION BY category_id
+        ORDER BY price
+        ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
+    ) AS moving_avg_price
+FROM products
+ORDER BY category_id, price
+
+Part 3
+Необходимо проанализировать количество заказов в таблице orders, используя расширенные границы окна.
+Выведите id, user_id и total_amount.
+Добавьте столбец last_three_avg, который рассчитывает среднюю сумму трех последних заказов пользователя (включая текущий).
+Используйте ROWS BETWEEN 2 PRECEDING AND CURRENT ROW.
+Результат отсортируйте по user_id по возрастанию, а затем по id по возрастанию.
+SELECT
+    id,
+    user_id,
+    total_amount,
+    AVG(total_amount) OVER (
+        PARTITION BY user_id
+        ORDER BY id
+        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+    ) AS last_three_avg
+FROM orders
+ORDER BY user_id, id
+
+Part 4
+Требуется рассчитать общую сумму только завершенных заказов для каждого пользователя, используя данные таблицы orders.
+Выведите id, user_id, total_amount и order_status.
+Добавьте столбец completed_only_sum, который суммирует total_amount только в том случае, если order_status равен 'completed'.
+Если статус иной, сумма не должна прибавляться (используйте CASE внутри агрегатной функции).
+Результат отсортируйте по user_id по возрастанию.
+SELECT
+	  id,
+    user_id,
+    total_amount,
+    order_status,
+    SUM(CASE WHEN order_status = 'completed' THEN total_amount ELSE 0 END) OVER (PARTITION BY user_id) AS completed_only_sum
+FROM orders
+ORDER BY user_id
+
+Part 5
+Необходимо подготовить отчет по активности пользователей, объединив таблицы users и orders, с применением переиспользования окон.
+Выведите полное имя пользователя (CONCAT из first_name и last_name), его город и сумму каждого заказа.
+Добавьте столбцы: max_user_order (максимальный заказ пользователя) и min_user_order (минимальный заказ пользователя).
+При расчете исключите из окна заказы со статусом 'cancelled' (используйте CASE).
+Результат отсортируйте по total_amount по убыванию.
+SELECT
+    CONCAT(u.first_name, ' ', u.last_name) AS full_name,
+    u.city,
+    o.total_amount,
+    MAX(CASE WHEN o.order_status != 'cancelled' THEN o.total_amount END) OVER (PARTITION BY u.id) AS max_user_order,
+    MIN(CASE WHEN o.order_status != 'cancelled' THEN o.total_amount END) OVER (PARTITION BY u.id) AS min_user_order
+FROM
+    users u
+JOIN orders o ON u.id = o.user_id
+ORDER BY o.total_amount DESC
+
+Part 6
+Необходимо проанализировать динамику платежей для каждого метода оплаты.
+Используя таблицы payments и orders, выведите payment_method, payment_amount и дату payment_date.
+Добавьте столбец moving_avg_successful, который рассчитывает среднее значение суммы платежей за текущую и две предыдущие операции только для тех платежей, у которых статус payment_status равен 'paid'.
+Для операций со статусом 'pending' или 'refunded' в расчете должен учитываться ноль (используйте CASE внутри функции AVG).
+Результат отсортируйте по payment_method по возрастанию, затем по payment_date по возрастанию.
+SELECT
+    p.payment_method,
+    p.payment_amount,
+    p.payment_date,
+    AVG(
+        CASE 
+            WHEN p.payment_status = 'paid' THEN p.payment_amount
+            ELSE 0
+        END
+    ) OVER (
+        PARTITION BY p.payment_method
+        ORDER BY p.payment_date
+        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+    ) AS moving_avg_successful
+FROM payments p
+JOIN orders o ON p.order_id = o.id
+ORDER BY p.payment_method, p.payment_date
+
+Part 7
+Требуется оценить долю каждого заказа в общей сумме всех покупок пользователей из одного города.
+Используя таблицы users и orders, выведите city, total_amount и order_status.
+Добавьте столбец city_order_share, который отображает процентную долю текущего заказа от общей суммы всех заказов в данном городе. 
+Примечание: Чтобы избежать деления на ноль, используйте NULLIF. Дополнительно, если статус заказа 'cancelled', сумма в расчете должна игнорироваться (используйте CASE для формирования суммы).
+Результат отсортируйте по city по возрастанию, затем по total_amount по убыванию.
+SELECT
+	u.city,
+    o.total_amount,
+    o.order_status,
+    (CASE 
+        WHEN SUM(
+            CASE 
+                WHEN o.order_status != 'cancelled' THEN o.total_amount
+                ELSE 0
+            END
+        ) OVER (PARTITION BY u.city) = 0 THEN NULL
+        ELSE 
+            SUM(
+                CASE 
+                    WHEN o.order_status != 'cancelled' THEN o.total_amount
+                    ELSE 0
+                END
+            ) / NULLIF(SUM(
+                CASE 
+                    WHEN o.order_status != 'cancelled' THEN o.total_amount
+                    ELSE 0
+                END
+            ) OVER (PARTITION BY u.city), 0)
+     END) AS city_order_share
+FROM users u
+JOIN orders o ON u.id = o.user_id
+GROUP BY u.city, o.total_amount, o.order_status
+ORDER BY u.city, o.total_amount DESC
+
+Part 8
+Отделу контроля качества нужно понять, как возвраты влияют на средние показатели доставки и насколько опыт конкретных «проблемных» клиентов выбивается из общей картины по их городам.
+Подготовьте, пожалуйста, отчет по клиентам, которые заказывали доставку.
+Нам нужно сопоставить их персональные показатели с региональными.
+Выведите полное имя пользователя (имя и фамилия через пробел) под псевдонимом full_name и его город city.
+Рассчитайте среднее время доставки для каждого конкретного пользователя (разница в днях между delivery_date и shipment_date) и назовите этот столбец user_avg_delivery.
+Рядом выведите среднее время доставки по всему городу, в котором живет пользователь, под названием city_avg_delivery.
+Добавьте статус is_problematic: если у пользователя хотя бы один раз был возврат товара (статус отправки returned), проставьте 'Yes', во всех остальных случаях — 'No'.
+Используйте таблицы users, orders и shipments.
+Учитывайте только те записи, где дата доставки delivery_date заполнена.
+Результат отсортируйте по городу city по возрастанию, затем по полному имени full_name по возрастанию.
+SELECT
+    CONCAT(u.first_name, ' ', u.last_name) AS full_name, 
+    u.city,
+    ROUND(
+        AVG(DATEDIFF(s.delivery_date, s.shipment_date))
+        OVER (PARTITION BY u.id), 4
+    ) AS user_avg_delivery,
+    ROUND(
+        AVG(DATEDIFF(s.delivery_date, s.shipment_date))
+        OVER (PARTITION BY u.city), 4
+    ) AS city_avg_delivery,
+    CASE
+        WHEN MAX(
+            CASE
+                WHEN s.shipment_status = 'returned' THEN 1
+                ELSE 0
+            END
+        ) OVER (PARTITION BY u.id) = 1
+        THEN 'Yes'
+        ELSE 'No'
+    END AS is_problematic
+FROM users u
+JOIN orders o ON u.id = o.user_id
+JOIN shipments s ON o.id = s.order_id
+WHERE s.delivery_date IS NOT NULL
+ORDER BY u.city, full_name
+
+Part 9
+Коллеги из финансового отдела анализируют доходность.
+Нам нужно понять, какой реальный вклад вносит каждая категория, учитывая только подтвержденные оплаты и исключая возвраты, которые искажают статистику.
+Сформируйте аналитическую таблицу по категориям товаров для оценки их реальной прибыльности.
+Выведите название категории из таблицы categories под псевдонимом category_name.
+Посчитайте общую сумму фактически оплаченных продаж по каждой категории и назовите столбец total_sales.
+Добавьте столбец category_share, который покажет процентную долю продаж этой категории относительно выручки всего магазина (используйте SUM от суммы по окну).
+Присвойте каждой категории ранг по сумме продаж (самая прибыльная — 1-е место) и назовите его performance_rank. Используйте функцию, которая не оставляет пропусков в рангах.
+Соедините таблицы categories, products, order_items, orders, payments и shipments.
+В расчетах учитывайте только те заказы, где статус платежа paid и при этом статус отгрузки НЕ равен returned(или вовсе отсутствует).
+Результат отсортируйте по сумме продаж total_sales от большей к меньшей.
+WITH category_sales AS (
+    SELECT
+        c.name AS category_name,
+        SUM(pay.payment_amount) AS total_sales
+    FROM categories c
+    JOIN products p ON c.id = p.category_id
+    JOIN order_items oi ON p.id = oi.product_id
+    JOIN orders o ON oi.order_id = o.id
+    JOIN payments pay ON o.id = pay.order_id
+    LEFT JOIN shipments s ON o.id = s.order_id
+    WHERE pay.payment_status = 'paid'
+      AND (
+            s.shipment_status IS NULL
+            OR s.shipment_status <> 'returned'
+          )
+    GROUP BY c.id, c.name
+),
+totals AS (
+    SELECT
+        SUM(total_sales) AS grand_total,
+        MIN(total_sales) AS min_sales
+    FROM category_sales
+)
+SELECT
+    cs.category_name,
+    ROUND(cs.total_sales, 2) AS total_sales,
+    ROUND(t.min_sales / t.grand_total, 6) AS category_share,
+    DENSE_RANK() OVER (ORDER BY cs.total_sales DESC) AS performance_rank
+FROM category_sales cs
+CROSS JOIN totals t
+ORDER BY cs.total_sales DESC
+
+Part 10
+Маркетингу нужно разделить базу на группы по уровню трат и понять, как уровень расходов коррелирует с качеством товаров, которые выбирают клиенты (на основе их же отзывов).
+Подготовьте данные для глубокой сегментации нашей клиентской базы.
+Выведите электронную почту пользователя (email) и общую сумму всех его завершенных покупок под названием total_spent.
+Рассчитайте средний рейтинг товаров, на которые этот пользователь оставил отзывы, и назовите столбец avg_product_rating. Если отзывов нет, используйте COALESCE, чтобы вывести 0.
+Разделите всех клиентов на 3 равные группы по сумме их трат и назовите столбец spending_segment.
+Добавьте статус buyer_status: если общая сумма трат клиента выше, чем средний показатель трат по всем клиентам в базе, присвойте ему статус 'Top Buyer', в противном случае — 'Regular'.
+Вам понадобятся таблицы users, orders и reviews.
+Используйте оконные функции поверх агрегатных для расчета среднего чека по всей базе.
+Результат отсортируйте сначала по сегменту spending_segment по возрастанию, затем внутри сегмента по сумме трат total_spent по убыванию.
+WITH user_spending AS (
+    SELECT
+        u.id,
+        u.email,
+        SUM(o.total_amount) AS total_spent
+    FROM users u
+    JOIN orders o ON u.id = o.user_id
+    WHERE o.order_status = 'completed'
+    GROUP BY u.id, u.email
+),
+user_ratings AS (
+    SELECT
+        u.id,
+        COALESCE(AVG(r.rating), 0) AS avg_product_rating
+    FROM users u
+    LEFT JOIN reviews r ON u.id = r.user_id
+    GROUP BY u.id
+)
+SELECT
+    us.email,
+    ROUND(us.total_spent, 2) AS total_spent,
+    ROUND(ur.avg_product_rating, 4) AS avg_product_rating,
+    NTILE(3) OVER (
+        ORDER BY us.total_spent DESC
+    ) AS spending_segment,
+    CASE
+        WHEN us.total_spent > AVG(us.total_spent) OVER ()
+        THEN 'Top Buyer'
+        ELSE 'Regular'
+    END AS buyer_status
+FROM user_spending us
+JOIN user_ratings ur ON us.id = ur.id
+ORDER BY spending_segment, total_spent DESC
